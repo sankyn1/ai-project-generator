@@ -16,9 +16,9 @@ class AIProviderService {
 
   async generateText(prompt, apiConfig) {
     const { provider, model, apiKey, baseUrl } = apiConfig;
-    
+
     console.log(`🤖 Calling ${provider} with model ${model}`);
-    
+
     if (!this.providers[provider]) {
       throw new Error(`Unsupported provider: ${provider}`);
     }
@@ -36,7 +36,7 @@ class AIProviderService {
       {
         model,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 3000,
+        max_tokens: 8000,
         temperature: 0.7
       },
       {
@@ -55,7 +55,7 @@ class AIProviderService {
       `${baseUrl || 'https://api.anthropic.com'}/v1/messages`,
       {
         model,
-        max_tokens: 3000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }]
       },
       {
@@ -75,10 +75,10 @@ class AIProviderService {
       // Ensure we're using the correct model name
       const modelName = model.includes('gemini') ? model : 'gemini-1.5-flash';
       const url = `${baseUrl || 'https://generativelanguage.googleapis.com/v1beta'}/models/${modelName}:generateContent?key=${apiKey}`;
-      
+
       console.log(`🔍 Google AI Request URL: ${url}`);
       console.log(`🔍 Using model: ${modelName}`);
-      
+
       const requestBody = {
         contents: [{
           parts: [{ text: prompt }]
@@ -87,12 +87,12 @@ class AIProviderService {
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 3000,
+          maxOutputTokens: 8000, // Increased from 3000 to 8000
         }
       };
-      
+
       console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
-      
+
       const response = await axios.post(url, requestBody, {
         headers: {
           'Content-Type': 'application/json'
@@ -102,15 +102,78 @@ class AIProviderService {
 
       console.log('✅ Google AI Response status:', response.status);
       console.log('✅ Google AI Response data:', JSON.stringify(response.data, null, 2));
-      
-      if (response.data.candidates && response.data.candidates[0] && response.data.candidates[0].content) {
-        const text = response.data.candidates[0].content.parts[0].text;
-        console.log('✅ Extracted text length:', text.length);
-        return text;
-      } else {
-        console.error('❌ Invalid response structure:', JSON.stringify(response.data, null, 2));
-        throw new Error('Invalid response format from Google AI - no candidates found');
+
+      // Enhanced response validation
+      if (!response.data) {
+        throw new Error('Empty response from Google AI API');
       }
+
+      // Check for error in response
+      if (response.data.error) {
+        throw new Error(`Google AI API Error: ${response.data.error.message || 'Unknown error'}`);
+      }
+
+      // Check for candidates array
+      if (!response.data.candidates || !Array.isArray(response.data.candidates)) {
+        console.error('❌ No candidates array in response:', JSON.stringify(response.data, null, 2));
+        throw new Error('Google AI API returned no candidates. This might be due to content filtering or API quota limits.');
+      }
+
+      // Check if candidates array is empty
+      if (response.data.candidates.length === 0) {
+        console.error('❌ Empty candidates array:', JSON.stringify(response.data, null, 2));
+        throw new Error('Google AI API returned empty candidates array. Content may have been filtered.');
+      }
+
+      // Check first candidate
+      const candidate = response.data.candidates[0];
+      if (!candidate) {
+        throw new Error('First candidate is null or undefined');
+      }
+
+      // Check for finish reason
+      if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+        console.warn('⚠️ Generation finished with reason:', candidate.finishReason);
+        if (candidate.finishReason === 'SAFETY') {
+          throw new Error('Content was blocked by Google AI safety filters. Try rephrasing your requirements.');
+        } else if (candidate.finishReason === 'MAX_TOKENS') {
+          console.warn('⚠️ Response was truncated due to max tokens limit');
+          // Don't throw error for MAX_TOKENS, just log warning and continue with partial content
+        }
+      }
+
+      // Check content structure
+      if (!candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts)) {
+        console.error('❌ Invalid content structure:', JSON.stringify(candidate, null, 2));
+        throw new Error('Invalid content structure in Google AI response');
+      }
+
+      // Check if parts array is empty
+      if (candidate.content.parts.length === 0) {
+        throw new Error('Empty parts array in Google AI response');
+      }
+
+      // Extract text
+      const textPart = candidate.content.parts[0];
+      if (!textPart || !textPart.text) {
+        console.error('❌ No text in first part:', JSON.stringify(textPart, null, 2));
+        throw new Error('No text content in Google AI response');
+      }
+
+      let text = textPart.text;
+      console.log('✅ Extracted text length:', text.length);
+
+      if (text.length === 0) {
+        throw new Error('Google AI returned empty text content');
+      }
+
+      // If response was truncated due to MAX_TOKENS, add a note
+      if (candidate.finishReason === 'MAX_TOKENS') {
+        text += '\n\n---\n**Note:** This response was truncated due to length limits. The content above is complete but may end abruptly. Consider breaking down your requirements into smaller sections for more detailed responses.';
+      }
+
+      return text;
+
     } catch (error) {
       console.error('❌ Google AI API Error Details:');
       console.error('URL:', error.config?.url);
@@ -119,18 +182,28 @@ class AIProviderService {
       console.error('Headers:', error.response?.headers);
       console.error('Data:', JSON.stringify(error.response?.data, null, 2));
       console.error('Message:', error.message);
-      
+
+      // Handle specific HTTP errors
       if (error.response?.status === 404) {
-        throw new Error(`Google AI API 404: Model '${model}' not found. Available models: gemini-1.5-flash, gemini-1.5-pro`);
+        throw new Error(`Google AI API 404: Model '${model}' not found. Try using 'gemini-1.5-flash' or 'gemini-1.5-pro'`);
       } else if (error.response?.status === 403) {
-        throw new Error('Google AI API 403: Invalid API key or API not enabled. Check your Google AI Studio settings.');
+        throw new Error('Google AI API 403: Invalid API key or API not enabled. Check your Google AI Studio settings and ensure the Gemini API is enabled.');
       } else if (error.response?.status === 400) {
         const errorMsg = error.response?.data?.error?.message || 'Bad request';
         throw new Error(`Google AI API 400: ${errorMsg}`);
+      } else if (error.response?.status === 429) {
+        throw new Error('Google AI API 429: Rate limit exceeded. Please wait a moment and try again.');
       } else if (error.code === 'ECONNABORTED') {
         throw new Error('Google AI API timeout - request took too long');
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        throw new Error('Cannot connect to Google AI API. Check your internet connection.');
       }
-      
+
+      // If it's already a custom error message, don't wrap it
+      if (error.message.includes('Google AI') || error.message.includes('Content was blocked') || error.message.includes('candidates')) {
+        throw error;
+      }
+
       throw new Error(`Google AI API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }
@@ -141,7 +214,7 @@ class AIProviderService {
       {
         model,
         prompt,
-        max_tokens: 3000,
+        max_tokens: 8000,
         temperature: 0.7
       },
       {
@@ -161,7 +234,7 @@ class AIProviderService {
       {
         inputs: prompt,
         parameters: {
-          max_new_tokens: 3000,
+          max_new_tokens: 8000,
           temperature: 0.7
         }
       },
@@ -200,7 +273,7 @@ class AIProviderService {
       {
         model,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 3000,
+        max_tokens: 8000,
         temperature: 0.7
       },
       {
@@ -220,7 +293,7 @@ class AIProviderService {
       {
         model,
         prompt,
-        max_tokens: 3000,
+        max_tokens: 8000,
         temperature: 0.7
       },
       {

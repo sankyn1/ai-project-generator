@@ -4,24 +4,25 @@ const logger = require('./logger');
 // Generate Software Requirements Specification
 async function generateSRS(requirements, projectType, apiConfig) {
   try {
+    // Optimize requirements to reduce token usage while keeping detail
+    const detailedRequirements = requirements.map((req, index) => `${index + 1}. ${req}`).join('\n');
+    
     const prompt = `
-Generate a comprehensive Software Requirements Specification (SRS) document based on these requirements:
+Create SRS document for ${projectType}:
 
-Requirements: ${JSON.stringify(requirements, null, 2)}
-Project Type: ${projectType}
+Requirements:
+${detailedRequirements}
 
-Include the following sections:
-1. Introduction and Purpose
+Include:
+1. Introduction & Purpose
 2. Overall Description
 3. Functional Requirements (detailed)
-4. Non-Functional Requirements
+4. Non-Functional Requirements (performance, security, usability)
 5. System Features
 6. User Interface Requirements
-7. Performance Requirements
-8. Security Requirements
-9. Assumptions and Dependencies
+7. Assumptions & Dependencies
 
-Format as structured markdown with clear sections and subsections.
+Format as structured markdown with clear sections.
 `;
 
     console.log('🔄 Generating SRS...');
@@ -46,40 +47,31 @@ Format as structured markdown with clear sections and subsections.
 // Generate Flow Diagram (Mermaid format)
 async function generateFlowDiagram(requirements, projectType, apiConfig) {
   try {
+    // Optimize requirements to key features only
+    const keyFeatures = requirements.slice(0, 3).map(req => req.substring(0, 80)).join('; ');
+    
     const prompt = `
-Create a system flow diagram in VALID Mermaid syntax. Follow these EXACT rules:
+Create Mermaid flowchart for ${projectType} with features: ${keyFeatures}
 
-Requirements: ${JSON.stringify(requirements, null, 2)}
-Project Type: ${projectType}
+RULES:
+1. Start with: flowchart TD
+2. Use single letters: A, B, C, D, E, F
+3. Labels in quotes: A["Start"]
+4. Decisions: C{"Question?"}
+5. Arrows: A --> B
+6. Conditions: C -->|Yes| D
 
-CRITICAL RULES - DO NOT DEVIATE:
-1. Start with EXACTLY: flowchart TD
-2. Use ONLY single letters for nodes: A, B, C, D, E, F, G, H
-3. Use ONLY this arrow syntax: A --> B
-4. Put ALL labels in square brackets with quotes: A["Label Text"]
-5. For decisions use curly braces: C{"Question?"}
-6. For conditions use: C -->|Yes| D
-
-VALID EXAMPLE:
+Example:
 \`\`\`mermaid
 flowchart TD
-    A["Start"] --> B["Process"]
-    B --> C{"Decision?"}
-    C -->|Yes| D["Action 1"]
-    C -->|No| E["Action 2"]
-    D --> F["End"]
-    E --> F
+    A["Start"] --> B["Login"]
+    B --> C{"Valid?"}
+    C -->|Yes| D["Dashboard"]
+    C -->|No| B
+    D --> E["End"]
 \`\`\`
 
-INVALID EXAMPLES (DO NOT USE):
-- graph TD (use flowchart TD)
-- Define Node Styles (no style definitions)
-- A - --> B (use A --> B)
-- Spaces in node names
-- Complex formatting
-
-Generate a simple, clean flowchart showing the main user flow for this ${projectType}.
-Use maximum 8 nodes (A through H). Keep it simple and syntactically correct.
+Generate simple user flow (max 6 nodes). Keep syntax correct.
 `;
 
     console.log('🔄 Generating Flow Diagram...');
@@ -103,107 +95,140 @@ Use maximum 8 nodes (A through H). Keep it simple and syntactically correct.
 
 // Generate SQL Schema and Templates
 async function generateSQLSchema(requirements, projectType, apiConfig) {
-  const prompt = `
-Generate comprehensive SQL database schema and templates based on these requirements:
+  try {
+    // Optimize requirements to reduce token usage
+    const keyRequirements = requirements.slice(0, 4).map(req => req.substring(0, 100)).join('; ');
+    
+    const prompt = `
+Create SQL schema for ${projectType} with features: ${keyRequirements}
 
-Requirements: ${JSON.stringify(requirements, null, 2)}
-Project Type: ${projectType}
+Generate:
+1. CREATE TABLE statements (main entities)
+2. Primary/foreign keys and relationships
+3. Essential indexes
+4. Sample INSERT data
+5. Common queries
 
-Provide:
-1. Complete CREATE TABLE statements
-2. Proper relationships and foreign keys
-3. Indexes for performance
-4. Sample INSERT statements
-5. Common query templates
-6. Database migration scripts
-
-Use PostgreSQL syntax with best practices.
+Use PostgreSQL syntax. Keep it practical and focused.
 `;
 
-  return await aiProvider.generateText(prompt, apiConfig);
+    console.log('🗄️ Generating SQL Schema...');
+    const result = await aiProvider.generateText(prompt, apiConfig);
+    
+    // Log the prompt and response
+    await logger.logPromptAndResponse('SQL_SCHEMA', prompt, result, {
+      provider: apiConfig.provider,
+      model: apiConfig.model,
+      projectType,
+      requirementsCount: requirements.length
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('❌ SQL Schema Generation Error:', error);
+    throw new Error(`Failed to generate SQL schema: ${error.message}`);
+  }
 }
 
 // Generate Figma Design Specifications
 async function generateFigmaDesign(requirements, projectType, apiConfig) {
-  const prompt = `
-Generate detailed Figma design specifications and wireframes based on these requirements:
+  try {
+    // Optimize requirements to reduce token usage
+    const optimizedRequirements = requirements.slice(0, 5).map(req => req.substring(0, 100)).join('; ');
+    
+    const prompt = `
+Create Figma design specs for a ${projectType} with these key features: ${optimizedRequirements}
 
-Requirements: ${JSON.stringify(requirements, null, 2)}
-Project Type: ${projectType}
-
-Provide:
-1. Detailed wireframe descriptions for each screen
-2. Component specifications
-3. Color palette recommendations
-4. Typography guidelines
+Include:
+1. Main screen wireframes (3-5 screens max)
+2. Color palette (5-6 colors)
+3. Typography (2-3 font sizes)
+4. Key components (buttons, forms, cards)
 5. Layout structure
-6. Interactive elements
-7. Responsive design considerations
-8. User flow between screens
+6. User flow
 
-Format as detailed design specifications that can be implemented in Figma.
+Keep it concise but implementable.
 `;
 
-  return await aiProvider.generateText(prompt, apiConfig);
+    console.log('🎨 Generating Figma Design...');
+    const result = await aiProvider.generateText(prompt, apiConfig);
+    
+    // Log the prompt and response
+    await logger.logPromptAndResponse('FIGMA_DESIGN', prompt, result, {
+      provider: apiConfig.provider,
+      model: apiConfig.model,
+      projectType,
+      requirementsCount: requirements.length
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Figma Design Generation Error:', error);
+    throw new Error(`Failed to generate Figma design: ${error.message}`);
+  }
 }
 
 // Generate Technology Stack Recommendations
 async function generateTechStack(requirements, techPreferences, projectType, apiConfig) {
-  const prompt = `
-Recommend optimal technology stack based on these requirements:
+  try {
+    // Optimize inputs to reduce token usage
+    const keyRequirements = requirements.slice(0, 3).map(req => req.substring(0, 80)).join('; ');
+    const prefs = Object.entries(techPreferences).filter(([k, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ');
+    
+    const prompt = `
+Recommend tech stack for ${projectType} with features: ${keyRequirements}
+Preferences: ${prefs}
 
-Requirements: ${JSON.stringify(requirements, null, 2)}
-Tech Preferences: ${JSON.stringify(techPreferences, null, 2)}
-Project Type: ${projectType}
+Provide:
+1. Frontend: Framework + key libraries
+2. Backend: Language/framework + database
+3. Cloud: Platform + key services
+4. DevOps: CI/CD + deployment
+5. Testing: Frameworks + tools
 
-Provide detailed recommendations for:
-1. Frontend technologies
-2. Backend technologies
-3. Database solutions
-4. Cloud services
-5. Development tools
-6. Testing frameworks
-7. Deployment strategies
-8. Third-party integrations
-
-Include reasoning for each recommendation and alternatives.
+Include brief reasoning for each choice.
 `;
 
-  return await aiProvider.generateText(prompt, apiConfig);
+    console.log('⚙️ Generating Tech Stack...');
+    const result = await aiProvider.generateText(prompt, apiConfig);
+    
+    // Log the prompt and response
+    await logger.logPromptAndResponse('TECH_STACK', prompt, result, {
+      provider: apiConfig.provider,
+      model: apiConfig.model,
+      projectType,
+      requirementsCount: requirements.length
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Tech Stack Generation Error:', error);
+    throw new Error(`Failed to generate tech stack: ${error.message}`);
+  }
 }
 
 // Generate Project Structure following best practices
 async function generateProjectStructure(requirements, projectType, techPreferences, apiConfig) {
   try {
     console.log('🏗️ Starting project structure generation...');
+    
+    // Optimize inputs to reduce token usage
+    const keyRequirements = requirements.slice(0, 3).map(req => req.substring(0, 80)).join('; ');
+    const mainTech = techPreferences.frontend || techPreferences.backend || 'modern web stack';
+    
     const prompt = `
-Generate a comprehensive project structure following industry best practices and clean architecture principles for:
+Create clean architecture project structure for ${projectType} using ${mainTech}.
+Key features: ${keyRequirements}
 
-Requirements: ${JSON.stringify(requirements, null, 2)}
-Project Type: ${projectType}
-Tech Preferences: ${JSON.stringify(techPreferences, null, 2)}
+Generate:
+1. Folder tree (src/, tests/, docs/, config/)
+2. Clean architecture layers (domain, application, infrastructure)
+3. Key files and purposes
+4. Testing structure
+5. Configuration setup
 
-Create a detailed folder structure that follows:
-1. Clean Architecture principles (Domain, Application, Infrastructure layers)
-2. SOLID principles
-3. Separation of concerns
-4. Industry best practices from top tech companies (Google, Microsoft, Netflix, etc.)
-5. Scalable and maintainable structure
-6. Testing structure (unit, integration, e2e)
-7. Configuration management
-8. Documentation structure
-9. CI/CD pipeline structure
-10. Environment-specific configurations
-
-Include:
-- Complete folder tree with explanations
-- Key files and their purposes
-- Architecture layers explanation
-- Best practices reasoning
-- Scalability considerations
-- Team collaboration structure
-
-Format as a detailed markdown document with folder tree visualization.
+Focus on scalability and maintainability. Use industry best practices.
+Format as markdown with folder tree.
 `;
 
     const result = await aiProvider.generateText(prompt, apiConfig);
@@ -228,57 +253,37 @@ Format as a detailed markdown document with folder tree visualization.
 async function generateReferences(requirements, projectType, techPreferences, apiConfig) {
   try {
     console.log('🔗 Starting references generation...');
+    
+    // Optimize inputs to reduce token usage
+    const keyFeatures = requirements.slice(0, 3).map(req => req.substring(0, 60)).join(', ');
+    const mainTech = techPreferences.frontend || techPreferences.backend || 'web technologies';
+    
     const prompt = `
-Generate comprehensive references and similar projects for:
+Find references for ${projectType} with features: ${keyFeatures}
+Tech stack: ${mainTech}
 
-Requirements: ${JSON.stringify(requirements, null, 2)}
-Project Type: ${projectType}
-Tech Preferences: ${JSON.stringify(techPreferences, null, 2)}
+Provide:
+1. **GitHub Repos** (3-4 similar projects):
+   - Repo name and URL
+   - Key features
+   - Architecture used
 
-Provide detailed references including:
+2. **Live Examples** (2-3 production apps):
+   - Website URL
+   - Company/creator
+   - Notable features
 
-1. **Open Source Projects** (GitHub repositories with similar functionality):
-   - Repository URLs
-   - Star count and activity level
-   - Architecture patterns used
-   - Key features and learnings
-   - Code quality and documentation
+3. **Learning Resources**:
+   - Documentation links
+   - Tutorials and guides
+   - Best practice articles
 
-2. **Live Websites/Applications** (production examples):
-   - Website URLs
-   - Company/organization behind it
-   - Key features and UX patterns
-   - Technology stack used
-   - Scale and performance insights
-
-3. **Architecture References**:
-   - System design patterns
-   - Microservices examples
-   - Database design patterns
-   - API design examples
-   - Security implementation examples
-
-4. **Learning Resources**:
-   - Documentation and tutorials
-   - Best practice guides
-   - Architecture blogs and articles
-   - Video tutorials and courses
-   - Books and whitepapers
-
-5. **Tools and Libraries**:
-   - Recommended libraries and frameworks
+4. **Tools & Libraries**:
+   - Recommended frameworks
    - Development tools
-   - Testing frameworks
-   - Deployment tools
-   - Monitoring and analytics tools
+   - Testing libraries
 
-6. **Industry Examples**:
-   - How top companies solve similar problems
-   - Case studies and success stories
-   - Performance benchmarks
-   - Scalability examples
-
-Format as organized markdown with clear sections, clickable links, and detailed descriptions.
+Keep it practical and actionable.
 `;
 
     const result = await aiProvider.generateText(prompt, apiConfig);
